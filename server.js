@@ -7,8 +7,9 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-const DATA_FILE = path.join(__dirname, 'files.json');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+const DATA_FILE = path.join(DATA_DIR, 'files.json');
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
