@@ -4,22 +4,10 @@ const uploadBtn = document.getElementById('uploadBtn');
 const statusBox = document.getElementById('status');
 const count = document.getElementById('count');
 
-function adminPassword() {
-  let password = sessionStorage.getItem('adminPassword');
-
-  if (!password) {
-    password = prompt('Введите пароль администратора:');
-    if (password) sessionStorage.setItem('adminPassword', password);
-  }
-
-  return password;
-}
-
 function formatSize(bytes) {
-  if (bytes < 1024 * 1024) {
-    return (bytes / 1024).toFixed(1) + ' КБ';
-  }
-  return (bytes / (1024 * 1024)).toFixed(1) + ' МБ';
+  return bytes < 1024 * 1024
+    ? (bytes / 1024).toFixed(1) + ' КБ'
+    : (bytes / (1024 * 1024)).toFixed(1) + ' МБ';
 }
 
 function formatDate(date) {
@@ -44,6 +32,7 @@ async function loadFiles() {
 
     files.forEach(file => {
       const isPDF = file.type === '.pdf';
+
       const item = document.createElement('div');
       item.className = 'item';
 
@@ -74,11 +63,13 @@ async function loadFiles() {
       openBtn.textContent = 'Открыть';
 
       openBtn.onclick = () => {
+        const fileUrl = location.origin + '/files/' + encodeURIComponent(file.id);
+
         if (isPDF) {
-          window.open('/files/' + encodeURIComponent(file.id), '_blank');
+          window.open(fileUrl, '_blank');
         } else {
-          const url = location.origin + '/files/' + encodeURIComponent(file.id);
-          const viewer = 'https://view.officeapps.live.com/op/view.aspx?src=' + encodeURIComponent(url);
+          const viewer = 'https://view.officeapps.live.com/op/view.aspx?src=' +
+            encodeURIComponent(fileUrl);
           window.open(viewer, '_blank');
         }
       };
@@ -90,22 +81,12 @@ async function loadFiles() {
       deleteBtn.onclick = async () => {
         if (!confirm('Удалить презентацию "' + file.name + '"?')) return;
 
-        const password = adminPassword();
-        if (!password) return;
-
         const res = await fetch('/api/files/' + encodeURIComponent(file.id), {
-          method: 'DELETE',
-          headers: { 'x-admin-password': password }
+          method: 'DELETE'
         });
 
-        if (res.status === 401) {
-          sessionStorage.removeItem('adminPassword');
-          alert('Неверный пароль');
-          return;
-        }
-
         if (!res.ok) {
-          alert('Не удалось удалить файл');
+          alert('Не удалось удалить презентацию');
           return;
         }
 
@@ -127,12 +108,6 @@ fileInput.onchange = async () => {
   const file = fileInput.files[0];
   if (!file) return;
 
-  const password = adminPassword();
-  if (!password) {
-    fileInput.value = '';
-    return;
-  }
-
   const formData = new FormData();
   formData.append('presentation', file);
 
@@ -142,21 +117,12 @@ fileInput.onchange = async () => {
   try {
     const res = await fetch('/api/upload', {
       method: 'POST',
-      headers: { 'x-admin-password': password },
       body: formData
     });
 
     const data = await res.json();
 
-    if (res.status === 401) {
-      sessionStorage.removeItem('adminPassword');
-      alert('Неверный пароль');
-      return;
-    }
-
-    if (!res.ok) {
-      throw new Error(data.error || 'Ошибка загрузки');
-    }
+    if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
 
     statusBox.textContent = 'Презентация добавлена!';
     fileInput.value = '';

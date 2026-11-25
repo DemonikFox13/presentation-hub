@@ -6,7 +6,6 @@ const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'change-me-now';
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const DATA_FILE = path.join(__dirname, 'files.json');
@@ -29,21 +28,9 @@ function saveFiles(files) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(files, null, 2));
 }
 
-function auth(req, res, next) {
-  const password = req.headers['x-admin-password'];
-
-  if (!password || password !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Неверный пароль администратора' });
-  }
-
-  next();
-}
-
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    cb(null, crypto.randomUUID());
-  }
+  filename: (req, file, cb) => cb(null, crypto.randomUUID())
 });
 
 const upload = multer({
@@ -51,11 +38,7 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (ext === '.pdf' || ext === '.pptx') {
-      cb(null, true);
-    } else {
-      cb(new Error('Разрешены только PDF и PPTX'));
-    }
+    cb(null, ext === '.pdf' || ext === '.pptx');
   }
 });
 
@@ -66,9 +49,9 @@ app.get('/api/files', (req, res) => {
   res.json(files.filter(f => fs.existsSync(path.join(UPLOAD_DIR, f.id))));
 });
 
-app.post('/api/upload', auth, upload.single('presentation'), (req, res) => {
+app.post('/api/upload', upload.single('presentation'), (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: 'Файл не выбран' });
+    return res.status(400).json({ error: 'Выбери PDF или PPTX' });
   }
 
   const files = readFiles();
@@ -99,22 +82,17 @@ app.get('/files/:id', (req, res) => {
     return res.status(404).send('Файл не найден');
   }
 
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-
   if (item.type === '.pdf') {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline');
   } else {
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="presentation.pptx"`
-    );
+    res.setHeader('Content-Disposition', 'attachment; filename="presentation.pptx"');
   }
 
   res.sendFile(filePath);
 });
 
-app.delete('/api/files/:id', auth, (req, res) => {
+app.delete('/api/files/:id', (req, res) => {
   const files = readFiles();
   const item = files.find(f => f.id === req.params.id);
 
@@ -130,18 +108,16 @@ app.delete('/api/files/:id', auth, (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/health', (req, res) => {
-  res.send('OK');
-});
+app.get('/health', (req, res) => res.send('OK'));
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: 'Файл больше 100 МБ' });
+    return res.status(413).json({ error: 'Максимальный размер файла 100 МБ' });
   }
 
   res.status(400).json({ error: err.message || 'Ошибка' });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log('Presentation Hub started on port ' + PORT);
+  console.log('Presentation Hub running on port ' + PORT);
 });
