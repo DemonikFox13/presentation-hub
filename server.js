@@ -1,0 +1,147 @@
+const express = require('express');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const app = express();
+const PORT = process.env.PORT || 8000;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'change-me-now';
+
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const DATA_FILE = path.join(__dirname, 'files.json');
+
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+if (!fs.existsSync(DATA_FILE)) {
+  fs.writeFileSync(DATA_FILE, '[]');
+}
+
+function readFiles() {
+  try {
+    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function saveFiles(files) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(files, null, 2));
+}
+
+function auth(req, res, next) {
+  const password = req.headers['x-admin-password'];
+
+  if (!password || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Неверный пароль администратора' });
+  }
+
+  next();
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    cb(null, crypto.randomUUID());
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.pdf' || ext === '.pptx') {
+      cb(null, true);
+    } else {
+      cb(new Error('Разрешены только PDF и PPTX'));
+    }
+  }
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/files', (req, res) => {
+  const files = readFiles();
+  res.json(files.filter(f => fs.existsSync(path.join(UPLOAD_DIR, f.id))));
+});
+
+app.post('/api/upload', auth, upload.single('presentation'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Файл не выбран' });
+  }
+
+  const files = readFiles();
+
+  const item = {
+    id: req.file.filename,
+    name: path.basename(req.file.originalname),
+    size: req.file.size,
+    date: new Date().toISOString(),
+    type: path.extname(req.file.originalname).toLowerCase()
+  };
+
+  files.unshift(item);
+  saveFiles(files);
+
+  res.json(item);
+});
+
+app.get('/files/:id', (req, res) => {
+  const files = readFiles();
+  const item = files.find(f => f.id === req.params.id);
+
+  if (!item) return res.status(404).send('Файл не найден');
+
+  const filePath = path.join(UPLOAD_DIR, item.id);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('Файл не найден');
+  }
+
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  if (item.type === '.pdf') {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+  } else {
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="presentation.pptx"`
+    );
+  }
+
+  res.sendFile(filePath);
+});
+
+app.delete('/api/files/:id', auth, (req, res) => {
+  const files = readFiles();
+  const item = files.find(f => f.id === req.params.id);
+
+  if (!item) return res.status(404).json({ error: 'Файл не найден' });
+
+  const filePath = path.join(UPLOAD_DIR, item.id);
+
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+
+  saveFiles(files.filter(f => f.id !== item.id));
+  res.json({ success: true });
+});
+
+app.get('/health', (req, res) => {
+  res.send('OK');
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: 'Файл больше 100 МБ' });
+  }
+
+  res.status(400).json({ error: err.message || 'Ошибка' });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('Presentation Hub started on port ' + PORT);
+});

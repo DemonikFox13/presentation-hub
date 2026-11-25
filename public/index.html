@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Presentation Hub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">P</div>
+    <div>
+      <h1>Presentation Hub</h1>
+      <p>Твоя библиотека презентаций</p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="welcome">
+    <div>
+      <h2>Все презентации в одном месте</h2>
+      <p>Загружай, открывай и управляй своими файлами.</p>
+    </div>
+
+    <button id="uploadBtn" class="primary">
+      + Добавить презентацию
+    </button>
+  </section>
+
+  <input type="file" id="fileInput" accept=".pdf,.pptx" hidden>
+
+  <div id="status"></div>
+
+  <section class="library">
+    <div class="library-heading">
+      <h2>Мои презентации</h2>
+      <span id="count">0 файлов</span>
+    </div>
+
+    <div id="list" class="list"></div>
+  </section>
+</main>
+
+<footer>
+  Presentation Hub
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
